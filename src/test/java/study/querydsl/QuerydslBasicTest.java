@@ -17,6 +17,7 @@ import study.querydsl.entity.Team;
 
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
 import static study.querydsl.entity.QMember.member;
 
@@ -201,11 +202,9 @@ public class QuerydslBasicTest {
      */
     @Test
     public void sort() throws Exception {
-        // given
         em.persist(new Member(null, 100));
         em.persist(new Member("member5", 100));
         em.persist(new Member("member6", 100));
-        // when
 
         queryFactory = new JPAQueryFactory(em);
         List<Member> result = queryFactory
@@ -221,6 +220,42 @@ public class QuerydslBasicTest {
         assertThat(result2.getUsername()).isEqualTo("member6");
         assertThat(result3.getUsername()).isNull();
 
-        // then
+    }
+
+    @Test
+    public void paging1() throws Exception {
+
+        queryFactory = new JPAQueryFactory(em);
+        List<Member> result = queryFactory
+                .selectFrom(member)
+                .orderBy(member.username.desc())
+                .offset(1)
+                .limit(2)
+                .fetch();
+
+        assertThat(result.size()).isEqualTo(2);
+    }
+
+    @Test
+    public void paging2() throws Exception {
+
+        queryFactory = new JPAQueryFactory(em);
+        QueryResults<Member> queryResults = queryFactory
+                .selectFrom(member)
+                .orderBy(member.username.desc())
+                .offset(1)
+                .limit(2)
+                .fetchResults();
+        /*
+        count query
+
+        long total = queryFactory.selectFrom(member)
+                .fetchCount();
+        */
+
+        assertThat(queryResults.getTotal()).isEqualTo(4);
+        assertThat(queryResults.getResults().size()).isEqualTo(2);
+        assertThat(queryResults.getLimit()).isEqualTo(2);
+        assertThat(queryResults.getOffset()).isEqualTo(1);
     }
 }
