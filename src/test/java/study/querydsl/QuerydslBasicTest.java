@@ -2,6 +2,7 @@ package study.querydsl;
 
 
 import com.querydsl.core.QueryResults;
+import com.querydsl.core.Tuple;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import org.assertj.core.api.Assertions;
@@ -13,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 import study.querydsl.entity.Member;
 import study.querydsl.entity.QMember;
+import study.querydsl.entity.QTeam;
 import study.querydsl.entity.Team;
 
 import java.util.List;
@@ -20,6 +22,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
 import static study.querydsl.entity.QMember.member;
+import static study.querydsl.entity.QTeam.team;
 
 @SpringBootTest
 @Transactional
@@ -257,5 +260,67 @@ public class QuerydslBasicTest {
         assertThat(queryResults.getResults().size()).isEqualTo(2);
         assertThat(queryResults.getLimit()).isEqualTo(2);
         assertThat(queryResults.getOffset()).isEqualTo(1);
+    }
+
+    @Test
+    public void aggregation() throws Exception {
+        // given
+        queryFactory = new JPAQueryFactory(em);
+
+        List<Tuple> result = queryFactory
+                .select(
+                        member.count(),
+                        member.age.sum(),
+                        member.age.avg(),
+                        member.age.max(),
+                        member.age.min()
+                )
+                .from(member)
+                .fetch();
+
+        // when
+        Tuple tuple = result.get(0);
+        System.out.println("tuple = " + tuple);
+        // then
+        assertThat(tuple.get(member.count())).isEqualTo(4);
+        assertThat(tuple.get(member.age.avg())).isEqualTo(25);
+        assertThat(tuple.get(member.age.sum())).isEqualTo(100);
+        assertThat(tuple.get(member.age.max())).isEqualTo(40);
+        assertThat(tuple.get(member.age.min())).isEqualTo(10);
+    }
+
+    /**
+     * 팀의 이름과 각 팀의 평균 연령을 구해라.
+     */
+    @Test
+    public void group() throws Exception {
+        // given
+        queryFactory = new JPAQueryFactory(em);
+
+        List<Tuple> result = queryFactory
+                .select(
+                        team.name,
+                        member.age.avg()
+                )
+                .from(member)
+                .join(member.team, team)
+                /*.groupBy(team.name)*/
+                .having(member.age.avg().gt(20))
+                .fetch();
+
+        System.out.println("result = " + result);
+
+        // when
+        Tuple tuple1 = result.get(0);
+        Tuple tuple2 = result.get(1);
+
+
+        // then
+        assertThat(tuple1.get(team.name)).isEqualTo("teamA");
+        assertThat(tuple2.get(team.name)).isEqualTo("teamB");
+
+        assertThat(tuple1.get(member.age.avg())).isEqualTo(15);
+        assertThat(tuple2.get(member.age.avg())).isEqualTo(35);
+
     }
 }
