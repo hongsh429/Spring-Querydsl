@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.graphql.tester.AutoConfigureHttpGraphQlTester;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.Rollback;
 import org.springframework.transaction.annotation.Transactional;
 import study.querydsl.dto.MemberDto;
 import study.querydsl.dto.QMemberDto;
@@ -959,4 +960,72 @@ public class QuerydslBasicTest {
         return usernameEq2(usernameCond).and(ageEq2(ageCond));
     }
     /* ↑↑↑ 재사용성이 증가한다! */
+
+
+
+    /* bulk 연산 */
+    @Test
+   /* @Rollback(value = false) 확인하고 싶으면 해라~*/
+    public void bulkUpdate() throws Exception {
+        // given
+        queryFactory = new JPAQueryFactory(em);
+
+        /*
+        현재 영속성 컨텍스트에 들어가 있다.
+            * member1 -> 비회원
+            * member2 -> 비회원
+            * member3 -> member3
+            * member4 -> member4
+
+        저걸 이제 하려고 하는데, Querydsl에는 변경감지가 일어나서 update가 일어나고 날라간다.
+
+        AGE  	MEMBER_ID  	TEAM_ID  	USERNAME
+        10	        1	        1	    비회원
+        20	        2	        1	    비회원
+        30	        3	        2	    member3
+        40	        4	        2	    member4
+
+        그런데 영속성 컨텍스트에는 아직 기존의 상태가 남아 있다.
+        TMI : 그래서 @Modifying 이런 어노테이션이 존재하는 것.
+        * */
+
+        long count = queryFactory
+                .update(member)
+                .set(member.username, "비회원")
+                .where(member.age.lt(25))
+                .execute();
+
+        em.flush();
+        em.clear();
+
+        /* 여기 주의! */
+        List<Member> result = queryFactory
+                .selectFrom(member)
+                .fetch();       // 1차 캐시에 있기 때문에, 변경되지 않은 값으로 가지고 온다...그래서 영속성 컨텍스트를 비워줘야 한다.
+
+        for (Member member1 : result) {
+            System.out.println("member1.getUsername() = " + member1.getUsername());
+        }
+    }
+
+    @Test
+    public void bulkAdd() {
+        queryFactory = new JPAQueryFactory(em);
+
+        long count = queryFactory
+                .update(member)
+                .set(member.age, member.age.add(1))  // multiply도 잇다 ㅋㅋ
+                .execute();
+    }
+
+    @Test
+    public void bulkDelete() {
+        queryFactory = new JPAQueryFactory(em);
+
+        long count = queryFactory
+                .delete(member)
+                .where(member.age.gt(18))
+                .execute();
+    }
+
 }
