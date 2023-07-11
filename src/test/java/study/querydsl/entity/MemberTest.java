@@ -40,7 +40,9 @@ class MemberTest {
         em.clear();
 
         // when
-        List<Member> members = em.createQuery("select m from Member m", Member.class).getResultList();
+        List<Member> members = em
+                .createQuery("select m from Member m", Member.class)
+                .getResultList();
 
         // then
         for (Member member : members) {

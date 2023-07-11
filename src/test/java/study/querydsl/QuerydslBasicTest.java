@@ -4,6 +4,8 @@ package study.querydsl;
 import com.querydsl.core.QueryResults;
 import com.querydsl.core.Tuple;
 import com.querydsl.core.types.Expression;
+import com.querydsl.core.types.ExpressionUtils;
+import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.CaseBuilder;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.jpa.JPAExpressions;
@@ -19,6 +21,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.graphql.tester.AutoConfigureHttpGraphQlTester;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
+import study.querydsl.dto.MemberDto;
+import study.querydsl.dto.QMemberDto;
+import study.querydsl.dto.UserDto;
 import study.querydsl.entity.Member;
 import study.querydsl.entity.QMember;
 import study.querydsl.entity.QTeam;
@@ -652,8 +657,209 @@ public class QuerydslBasicTest {
                 .fetchOne();
 
         System.out.println("result = " + result);
-        // when
+    }
 
-        // then
+
+    /* 프로잭션 */
+    @Test
+    public void simpleProjection() throws Exception {
+        // given
+        queryFactory = new JPAQueryFactory(em);
+
+        List<String> result = queryFactory
+                .select(member.username)
+                .from(member)
+                .fetch();
+
+        for (String s : result) {
+            System.out.println("s = " + s);
+        }
+    }
+
+    @Test
+    public void tupleProjection() throws Exception {
+        // given
+        queryFactory = new JPAQueryFactory(em);
+
+        List<Tuple> result = queryFactory
+                .select(member.username, member.age)
+                .from(member)
+                .fetch();
+
+        System.out.println("result = " + result);
+
+        for (Tuple tuple : result) {
+            System.out.println("tuple.get(member.username) = " + tuple.get(member.username));
+            System.out.println("tuple.get(member.age) = " + tuple.get(member.age));
+        }
+
+        /*
+        Tuple은 패키지가 package com.querydsl.core; 라는 건.. repo를 떠나서 사용하는 건 좋지 않음.
+        왜? -> ✨✨ 그걸 넘김으로써 service가 repo에 종속적으로 변경되게됨...
+        그래서 보통은 dto로 넘기는 게 좋다.
+
+        */
+    }
+
+    // dto를 통한 프로잭션
+    @Test
+    public void findDtoByJPQL() throws Exception {
+        // given
+        /*new operation 활용법*/
+        List<MemberDto> resultList = em.createQuery(
+                "select new study.querydsl.dto.MemberDto(m.username, m.age)" +
+                        " from Member m", MemberDto.class).getResultList();
+
+        for (MemberDto memberDto : resultList) {
+            System.out.println("memberDto = " + memberDto);
+        }
+    }
+
+    /* 위의 문제를 querydsl은 3가지 방법으로 쉽게 지원한다. */
+    @Test
+    public void findDtoBySetter() throws Exception {
+        // 프로퍼티 접근법
+
+        queryFactory = new JPAQueryFactory(em);
+
+        List<MemberDto> result = queryFactory
+                .select(Projections.bean(MemberDto.class,
+                        member.username,
+                        member.age
+                ))
+                .from(member)
+                .fetch();
+
+        for (MemberDto memberDto : result) {
+            System.out.println("memberDto = " + memberDto);
+        }
+    }
+
+    @Test
+    public void findDtoByFields() throws Exception {
+        // constructor 접근법
+
+        queryFactory = new JPAQueryFactory(em);
+
+        List<MemberDto> result = queryFactory
+                .select(Projections.constructor(MemberDto.class,
+                        member.username,
+                        member.age
+                ))
+                .from(member)
+                .fetch();
+
+        for (MemberDto memberDto : result) {
+            System.out.println("memberDto = " + memberDto);
+        }
+    }
+
+    @Test
+    public void findDtoByContructor() throws Exception {
+        // 프로퍼티 접근법
+
+        queryFactory = new JPAQueryFactory(em);
+
+        List<MemberDto> result = queryFactory
+                .select(Projections.fields(MemberDto.class,
+                        member.username,
+                        member.age
+                ))
+                .from(member)
+                .fetch();
+
+        for (MemberDto memberDto : result) {
+            System.out.println("memberDto = " + memberDto);
+        }
+    }
+
+    @Test
+    public void findDtoByConstructorUserDto() throws Exception {
+        // 프로퍼티 접근법 + 별칭사용
+        queryFactory = new JPAQueryFactory(em);
+
+        List<UserDto> result = queryFactory
+                .select(Projections.fields(UserDto.class,
+                        member.username.as("name"),
+                        member.age
+                ))
+                .from(member)
+                .fetch();
+
+        for (UserDto userDto : result) {
+            System.out.println("memberDto = " + userDto);
+        }
+    }
+
+    @Test
+    public void findDtoByConstructorUserDto2() throws Exception {
+        // 프로퍼티 접근법 + 별칭사용
+        QMember memberSub = new QMember("memberSub");
+        queryFactory = new JPAQueryFactory(em);
+
+        List<UserDto> result = queryFactory
+                .select(Projections.fields(UserDto.class,
+                        member.username.as("name"),
+                        /*ExpressionUtils.as(member.username, "name") << 위의 코드와 동일 */
+                        ExpressionUtils.as(
+                                JPAExpressions
+                                        .select(memberSub.age.max())
+                                        .from(memberSub), "age")
+                ))
+                .from(member)
+                .fetch();
+
+        for (UserDto userDto : result) {
+            System.out.println("memberDto = " + userDto);
+        }
+    }
+
+    @Test
+    public void findDtoByConstructorUserDtoSpecial() throws Exception {
+        // 생성자 접근법 -> 별칭사용 안해도 알아서 들어가네?
+        QMember memberSub = new QMember("memberSub");
+        queryFactory = new JPAQueryFactory(em);
+
+        List<UserDto> result = queryFactory
+                .select(Projections.constructor(UserDto.class,
+                        member.username,
+                        /*ExpressionUtils.as(member.username, "name") << 위의 코드와 동일 */
+                        ExpressionUtils.as(
+                                JPAExpressions
+                                        .select(memberSub.age.max())
+                                        .from(memberSub), "age")
+                ))
+                .from(member)
+                .fetch();
+
+        for (UserDto userDto : result) {
+            System.out.println("userDto = " + userDto);
+        }
+    }
+
+
+    /*
+    @QueryProjection
+        위의 constructor로 설계하는 것과의 차이! 존재하지 않는 필드를 넣어주면,
+         @QueryProjection은 compile 오류를 발생시킨다.
+
+         but, Projections.constructor 는 함수가 호출되는 시점에서 오류를 발생시킨다.
+
+    조금만 깊게 고민해보면,,, @QueryProjection을 넣은 dto가 querydsl에 의존적으로 변한다...
+    쉽게 말해, 순수한 dto가 아니게 된다...
+    */
+    @Test
+    public void findDtoByQueryProjection() throws Exception {
+        // given
+        queryFactory = new JPAQueryFactory(em);
+
+        List<MemberDto> result = queryFactory
+                .select(new QMemberDto(member.username, member.age))
+                .from(member)
+                .fetch();
+
+        for (MemberDto memberDto : result) {
+            System.out.println("memberDto = " + memberDto);
+        }
     }
 }
