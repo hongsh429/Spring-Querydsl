@@ -917,6 +917,7 @@ public class QuerydslBasicTest {
         List<Member> result = searchMember2(usernameParam, ageParam);
         assertThat(result.size()).isEqualTo(1);
     }
+
     private List<Member> searchMember2(String usernameCond, Integer ageCond) {
         queryFactory = new JPAQueryFactory(em);
         return queryFactory
@@ -949,23 +950,25 @@ public class QuerydslBasicTest {
                 .where(allEq(usernameCond, ageCond))
                 .fetch();
     }
+
     /*public class BooleanExpression implements Predicate */
     private BooleanExpression usernameEq2(String usernameCond) {
         return usernameCond != null ? member.username.eq(usernameCond) : null;
     }
+
     private BooleanExpression ageEq2(Integer ageCond) {
         return ageCond != null ? member.age.eq(ageCond) : null;
     }
+
     private BooleanExpression allEq(String usernameCond, Integer ageCond) {
         return usernameEq2(usernameCond).and(ageEq2(ageCond));
     }
     /* ↑↑↑ 재사용성이 증가한다! */
 
 
-
     /* bulk 연산 */
     @Test
-   /* @Rollback(value = false) 확인하고 싶으면 해라~*/
+    /* @Rollback(value = false) 확인하고 싶으면 해라~*/
     public void bulkUpdate() throws Exception {
         // given
         queryFactory = new JPAQueryFactory(em);
@@ -1028,4 +1031,46 @@ public class QuerydslBasicTest {
                 .execute();
     }
 
+
+    /* sql function */
+    @Test
+    public void sqlFunction() throws Exception {
+        // given
+        queryFactory = new JPAQueryFactory(em);
+
+        List<String> result = queryFactory
+                .select(Expressions
+                        .stringTemplate(
+                                "function('replace', {0}, {1}, {2})",
+                                member.username, "member", "M"
+                        )
+                )
+                .from(member)
+                .fetch();
+
+        for (String s : result) {
+            System.out.println("s = " + s);
+        }
+    }
+
+    @Test
+    public void sqlFunction2() throws Exception {
+        // given
+        queryFactory = new JPAQueryFactory(em);
+
+        List<String> result = queryFactory
+                .select(member.username)
+                .from(member)
+                /*.where(member.username.eq(Expressions
+                        .stringTemplate(
+                                "function('lower', {0})",
+                                member.username
+                        )))*/
+                .where(member.username.eq(member.username.lower())) // 엄청 기본은 알아서 내장.
+                .fetch();
+
+        for (String s : result) {
+            System.out.println("s = " + s);
+        }
+    }
 }
