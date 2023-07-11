@@ -1,6 +1,7 @@
 package study.querydsl;
 
 
+import com.querydsl.core.QueryResults;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
 import org.assertj.core.api.Assertions;
@@ -157,5 +158,37 @@ public class QuerydslBasicTest {
         assertThat(findMembers.get(0).getUsername()).isEqualTo("member1");
     }
 
+    /* 결과 조회 fetchOne, fetch, fetchFirst, ... */
+    @Test
+    public void resultFetch() throws Exception {
+        // given
+        queryFactory = new JPAQueryFactory(em);
 
+        List<Member> fetch = queryFactory
+                .selectFrom(member)
+                .fetch();
+
+        Member fetchOne = queryFactory
+                .selectFrom(member)
+                .fetchOne();
+
+        Member fetchFirst = queryFactory
+                .selectFrom(member)
+                .fetchFirst();// == limit(1).fetchOne(); 과 동일
+
+        QueryResults<Member> result = queryFactory
+                .selectFrom(member)
+                .fetchResults();
+
+        /* 아래부터 쿼리가 날라 간다. */
+        System.out.println(result.getTotal());
+        List<Member> contents = result.getResults();
+
+        long total = queryFactory.selectFrom(member)
+                .fetchCount();
+
+        // when
+
+        // then
+    }
 }
