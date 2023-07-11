@@ -5,6 +5,8 @@ import com.querydsl.core.QueryResults;
 import com.querydsl.core.Tuple;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityManagerFactory;
+import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.PersistenceUnit;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,7 +34,6 @@ public class QuerydslBasicTest {
     @Autowired
     EntityManager em;
 
-    @PersistenceUnit
     JPAQueryFactory queryFactory;
 
     @BeforeEach
@@ -128,6 +129,7 @@ public class QuerydslBasicTest {
         // then
         assertThat(findMember.getUsername()).isEqualTo("member1");
     }
+
     @Test
     public void searchParam() throws Exception {
         // given
@@ -204,6 +206,7 @@ public class QuerydslBasicTest {
      * 1. 회원 나이 내림차순(desc)
      * 2. 회원 이름 올림차순(asc)
      * 단 2에서 회원 이름이 없으면 마지막에 출력(nulls last)
+     *
      * @throws Exception
      */
     @Test
@@ -332,6 +335,7 @@ public class QuerydslBasicTest {
 
     /**
      * teamA에 소속된 모든 회원을 찾아라
+     *
      * @throws Exception
      */
     @Test
@@ -357,8 +361,9 @@ public class QuerydslBasicTest {
 
     /**
      * 세타 조인 - 연관관계가 없는 가운데 하는 조인
-     *
+     * <p>
      * 회원의 이름이 팀 이름과 같은 회원 조회
+     *
      * @throws Exception
      */
     @Test
@@ -391,6 +396,7 @@ public class QuerydslBasicTest {
     /**
      * 예) 회원과 팀을 조인하면스 팀 이름이 teamA인 팀만 조인, 회원은 모두 조회
      * JPQL: select m, t from Member m left join m.team t on t.name = 'teamA'
+     *
      * @throws Exception
      */
     @Test
@@ -416,7 +422,7 @@ public class QuerydslBasicTest {
     /**
      * 연관관계가 없는 언티티 외부 조인
      * 회원의 이름이 팀 이름과 같은 대상 외부 조인
-     * */
+     */
     @Test
     public void join_on_no_relation() throws Exception {
         // given
@@ -440,5 +446,46 @@ public class QuerydslBasicTest {
 
         System.out.println("results = " + results);
         // when
+    }
+
+
+    /* 페치 조인 */
+    @PersistenceUnit
+    EntityManagerFactory emf;   // 지금 해당 Entity가 로딩되었는지 아닌지 확인하기 위해 사용
+
+    @Test
+    public void fetchJoinNo() throws Exception {
+        em.flush();
+        em.clear();
+        queryFactory = new JPAQueryFactory(em);
+        // given
+        Member findMember = queryFactory
+                .selectFrom(member)
+                .where(member.username.eq("member1"))
+                .fetchOne();
+
+        boolean loaded = emf.getPersistenceUnitUtil().isLoaded(findMember.getTeam());
+        assertThat(loaded).as("description: 페치 조인 미적용").isFalse();
+
+        // then
+    }
+
+
+    @Test
+    public void fetchJoinUse() throws Exception {
+        em.flush();
+        em.clear();
+        queryFactory = new JPAQueryFactory(em);
+        // given
+        Member findMember = queryFactory
+                .selectFrom(member)
+                .join(member.team, team).fetchJoin()
+                .where(member.username.eq("member1"))
+                .fetchOne();
+
+        boolean loaded = emf.getPersistenceUnitUtil().isLoaded(findMember.getTeam());
+        assertThat(loaded).as("description: 페치 조인 적용").isTrue();
+
+        // then
     }
 }
