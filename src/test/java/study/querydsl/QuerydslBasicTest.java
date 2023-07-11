@@ -5,6 +5,7 @@ import com.querydsl.core.QueryResults;
 import com.querydsl.core.Tuple;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceUnit;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,8 @@ public class QuerydslBasicTest {
 
     @Autowired
     EntityManager em;
+
+    @PersistenceUnit
     JPAQueryFactory queryFactory;
 
     @BeforeEach
@@ -322,5 +325,120 @@ public class QuerydslBasicTest {
         assertThat(tuple1.get(member.age.avg())).isEqualTo(15);
         assertThat(tuple2.get(member.age.avg())).isEqualTo(35);
 
+    }
+
+
+    /* 조인 */
+
+    /**
+     * teamA에 소속된 모든 회원을 찾아라
+     * @throws Exception
+     */
+    @Test
+    public void join() throws Exception {
+        // given
+        queryFactory = new JPAQueryFactory(em);
+        List<Member> results = queryFactory
+                .selectFrom(member)
+                .join(member.team, team)    // (member의 team, QTeam) 이렇게 명시해준 것.
+                /*.leftJoin() .innerJoin()도 다 있다. */
+                /* .on() 생략 시, 기본 id로 알아서 되고, 조금 더 거르고 싶다면 명시해도 된다.*/
+                .where(team.name.eq("teamA"))
+                .fetch();
+
+        System.out.println("results = " + results);
+        // when
+        assertThat(results)
+                .extracting("username")
+                .containsExactly("member1", "member2");
+        // then
+    }
+
+
+    /**
+     * 세타 조인 - 연관관계가 없는 가운데 하는 조인
+     *
+     * 회원의 이름이 팀 이름과 같은 회원 조회
+     * @throws Exception
+     */
+    @Test
+    public void theta_join() throws Exception {
+        // given
+        queryFactory = new JPAQueryFactory(em);
+
+        em.persist(new Member("teamA"));
+        em.persist(new Member("teamB"));
+
+        /* db 마다 성능 최적화 하는 방법은 다르지만, 어느 정도 한다. */
+        List<Member> results = queryFactory
+                .select(member)
+                .from(member, team)
+                .where(member.username.eq(team.name))
+                .fetch();
+
+        System.out.println("results = " + results);
+        // when
+
+        // then
+        assertThat(results)
+                .extracting("username")
+                .containsExactly("teamA", "teamB");
+    }
+
+
+    /*  on 절 */
+
+    /**
+     * 예) 회원과 팀을 조인하면스 팀 이름이 teamA인 팀만 조인, 회원은 모두 조회
+     * JPQL: select m, t from Member m left join m.team t on t.name = 'teamA'
+     * @throws Exception
+     */
+    @Test
+    public void join_on_filtering() throws Exception {
+        // given
+        queryFactory = new JPAQueryFactory(em);
+
+        List<Tuple> results = queryFactory
+                .select(member, team)
+                .from(member)
+                .leftJoin(member.team, team)
+                .on(team.name.eq("teamA"))
+                .fetch();
+
+        for (Tuple result : results) {
+            System.out.println("result = " + result);
+        }
+        // when
+
+        // then
+    }
+
+    /**
+     * 연관관계가 없는 언티티 외부 조인
+     * 회원의 이름이 팀 이름과 같은 대상 외부 조인
+     * */
+    @Test
+    public void join_on_no_relation() throws Exception {
+        // given
+        queryFactory = new JPAQueryFactory(em);
+
+        em.persist(new Member("teamA"));
+        em.persist(new Member("teamB"));
+
+        /* db 마다 성능 최적화 하는 방법은 다르지만, 어느 정도 한다. */
+        List<Tuple> results = queryFactory
+                .select(member, team)
+                .from(member)
+                .leftJoin(team)
+                // 원래는 member.team, team 이엇는데~ 막조인할거라, 그냥 team 이라고 한다. 왜? 연관관계가 없어서
+
+                /* 관계가 없는 조인! on으로 연관관계를 맺어준다. */
+                .on(member.username.eq(team.name))
+                // 막조인과 기본 조인의 차이! -> team.id = member.team.id 이런게 잇어야 하는데 없다!
+
+                .fetch();
+
+        System.out.println("results = " + results);
+        // when
     }
 }
