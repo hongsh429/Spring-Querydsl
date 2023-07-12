@@ -1,13 +1,20 @@
 package study.querydsl.repository;
 
+import com.querydsl.core.QueryResults;
 import com.querydsl.core.types.Predicate;
 import com.querydsl.core.types.dsl.BooleanExpression;
+import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.util.StringUtils;
 import study.querydsl.dto.MemberSearchCondition;
 import study.querydsl.dto.MemberTeamDto;
 import study.querydsl.dto.QMemberTeamDto;
+import study.querydsl.entity.Member;
 import study.querydsl.entity.QMember;
 import study.querydsl.entity.QTeam;
 
@@ -45,6 +52,7 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom{
 
     }
 
+
     private BooleanExpression usernameEq(String username) {
         return StringUtils.hasText(username) ? member.username.eq(username) : null;
     }
@@ -59,5 +67,77 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom{
 
     private BooleanExpression ageGoe(Integer ageGoe) {
         return (ageGoe != null) ? member.age.goe(ageGoe) : null;
+    }
+
+
+
+    /* paging*/
+    @Override
+    public Page<MemberTeamDto> searchPageSimple(MemberSearchCondition condition, Pageable pageable) {
+        QueryResults<MemberTeamDto> result = jpaQueryFactory
+                .select(new QMemberTeamDto(
+                        member.id.as("memberId"),
+                        member.username,
+                        member.age,
+                        member.team.id.as("teamId"),
+                        member.team.name.as("teamName")
+                ))
+                .from(member)
+                .leftJoin(member.team, team)
+                .where(
+                        usernameEq(condition.getUsername()),
+                        teamNameEq(condition.getTeamName()),
+                        ageLoe(condition.getAgeLoe()),
+                        ageGoe(condition.getAgeGoe())
+                )
+                .offset(pageable.getOffset())   // 어디서부터 시작?
+                .limit(pageable.getPageSize())  // 한 페이지에 몇개?
+                .fetchResults();// content 용 쿼리와 count 용 쿼리를 2개 날린다.
+
+        List<MemberTeamDto> content = result.getResults();
+        long total = result.getTotal();
+
+
+        return new PageImpl<>(content, pageable, total);    // page의 구현체이다.
+    }
+
+    @Override
+    public Page<MemberTeamDto> searchPageComplex(MemberSearchCondition condition, Pageable pageable) {
+        List<MemberTeamDto> content = jpaQueryFactory
+                .select(new QMemberTeamDto(
+                        member.id.as("memberId"),
+                        member.username,
+                        member.age,
+                        member.team.id.as("teamId"),
+                        member.team.name.as("teamName")
+                ))
+                .from(member)
+                .leftJoin(member.team, team)
+                .where(
+                        usernameEq(condition.getUsername()),
+                        teamNameEq(condition.getTeamName()),
+                        ageLoe(condition.getAgeLoe()),
+                        ageGoe(condition.getAgeGoe())
+                )
+                .offset(pageable.getOffset())   // 어디서부터 시작?
+                .limit(pageable.getPageSize())  // 한 페이지에 몇개?
+                .fetch();// content 용 쿼리와 count 용 쿼리를 2개 날린다.
+
+        JPAQuery<Member> countQuery = jpaQueryFactory
+                .selectFrom(member)
+                .leftJoin(member.team, team)
+                .where(
+                        usernameEq(condition.getUsername()),
+                        teamNameEq(condition.getTeamName()),
+                        ageLoe(condition.getAgeLoe()),
+                        ageGoe(condition.getAgeGoe())
+                );
+
+                        /*
+                         실제 필요한 곳에서만 카운트 쿼리를 날리기위해서 fetchCount 전까지만 해서 보내준 것
+                                이것이 countQuery 최적화?
+                        */
+        return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchCount);
+//        return new PageImpl<>(content, pageable, total);    // page의 구현체이다.
     }
 }
