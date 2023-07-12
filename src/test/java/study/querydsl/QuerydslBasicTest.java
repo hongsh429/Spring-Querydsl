@@ -207,8 +207,11 @@ public class QuerydslBasicTest {
         System.out.println(result.getTotal());
         List<Member> contents = result.getResults();
 
-        long total = queryFactory.selectFrom(member)
-                .fetchCount();
+
+        Long count = queryFactory
+                .select(member.count())
+                .from(member)
+                .fetchOne();
 
         // when
 

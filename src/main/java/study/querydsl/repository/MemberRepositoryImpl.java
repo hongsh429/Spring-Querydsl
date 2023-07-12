@@ -1,14 +1,18 @@
 package study.querydsl.repository;
 
 import com.querydsl.core.QueryResults;
+import com.querydsl.core.types.Order;
+import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.core.types.Predicate;
 import com.querydsl.core.types.dsl.BooleanExpression;
+import com.querydsl.core.types.dsl.PathBuilder;
 import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.util.StringUtils;
 import study.querydsl.dto.MemberSearchCondition;
@@ -74,7 +78,7 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom{
     /* paging*/
     @Override
     public Page<MemberTeamDto> searchPageSimple(MemberSearchCondition condition, Pageable pageable) {
-        QueryResults<MemberTeamDto> result = jpaQueryFactory
+        JPAQuery<MemberTeamDto> query = jpaQueryFactory
                 .select(new QMemberTeamDto(
                         member.id.as("memberId"),
                         member.username,
@@ -91,11 +95,30 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom{
                         ageGoe(condition.getAgeGoe())
                 )
                 .offset(pageable.getOffset())   // 어디서부터 시작?
-                .limit(pageable.getPageSize())  // 한 페이지에 몇개?
-                .fetchResults();// content 용 쿼리와 count 용 쿼리를 2개 날린다.
+                .limit(pageable.getPageSize());// 한 페이지에 몇개?
+//                .fetch();// content 용 쿼리와 count 용 쿼리를 2개 날린다.
+        /* Querydsl Sort 적용! */
+        for (Sort.Order order : pageable.getSort()) {
+            PathBuilder pathBuilder = new PathBuilder(member.getType(), member.getMetadata());
+            query.orderBy(
+                    new OrderSpecifier(order.isAscending() ? Order.ASC : Order.DESC,
+                            pathBuilder.get(order.getProperty()))
+            );
+        }
+        List<MemberTeamDto> content = query.fetch();
 
-        List<MemberTeamDto> content = result.getResults();
-        long total = result.getTotal();
+        Long total = jpaQueryFactory
+                .select(member.count())
+                .from(member)
+                .leftJoin(member.team, team)
+                .where(
+                        usernameEq(condition.getUsername()),
+                        teamNameEq(condition.getTeamName()),
+                        ageLoe(condition.getAgeLoe()),
+                        ageGoe(condition.getAgeGoe())
+                )
+                .fetchOne();
+
 
 
         return new PageImpl<>(content, pageable, total);    // page의 구현체이다.
@@ -123,8 +146,9 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom{
                 .limit(pageable.getPageSize())  // 한 페이지에 몇개?
                 .fetch();// content 용 쿼리와 count 용 쿼리를 2개 날린다.
 
-        JPAQuery<Member> countQuery = jpaQueryFactory
-                .selectFrom(member)
+        JPAQuery<Long> countQuery = jpaQueryFactory
+                .select(member.count())
+                .from(member)
                 .leftJoin(member.team, team)
                 .where(
                         usernameEq(condition.getUsername()),
@@ -133,11 +157,12 @@ public class MemberRepositoryImpl implements MemberRepositoryCustom{
                         ageGoe(condition.getAgeGoe())
                 );
 
+
                         /*
                          실제 필요한 곳에서만 카운트 쿼리를 날리기위해서 fetchCount 전까지만 해서 보내준 것
                                 이것이 countQuery 최적화?
                         */
-        return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchCount);
+        return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
 //        return new PageImpl<>(content, pageable, total);    // page의 구현체이다.
     }
 }

@@ -108,7 +108,7 @@ class MemberRepositoryTest {
         assertThat(result.getSize()).isEqualTo(3);
         assertThat(result.getContent())
                 .extracting("username")
-                .containsExactly("member1", "member2", "member3");
+                .containsExactly("member4", "member3", "member2");
 
 
         /*
